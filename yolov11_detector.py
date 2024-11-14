@@ -1,5 +1,6 @@
 import numpy as np
 import supervision as sv
+from numpy import ndarray
 from ultralytics import YOLO
 from pathlib import Path
 import openvino as ov
@@ -77,6 +78,32 @@ class YOLOv11CrowdDetector:
 
         # Anotasi zona
         self.zone.trigger(detections=detections)
-        frame = self.zone_annotator.annotate(scene=frame)
+        frame: ndarray = self.zone_annotator.annotate(scene=frame)
 
-        return frame
+        # Ekstrak data bounding box, class, dan confidence untuk setiap deteksi
+        detection_data = []
+        for detection in detections:
+            box = detection['box']  # Asumsikan `box` menyimpan koordinat bounding box
+            class_name = detection['class_name']
+            confidence = detection['confidence']
+            detection_data.append({
+                "class_name": class_name,
+                "confidence": float(confidence),
+                "bounding_box": {
+                    "x_min": int(box[0]),
+                    "y_min": int(box[1]),
+                    "x_max": int(box[2]),
+                    "y_max": int(box[3])
+                }
+            })
+
+        return frame, detection_data  # Kembalikan frame yang sudah dianotasi beserta data deteksi
+
+    def get_crowd_category(self, count):
+        """Mengembalikan kategori berdasarkan jumlah deteksi."""
+        if count > 20:
+            return "Ramai"
+        elif 10 <= count <= 20:
+            return "Sedang"
+        else:
+            return "Sedikit"
