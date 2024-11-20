@@ -71,6 +71,8 @@ class YOLOv11CrowdDetector:
             in zip(detections['class_name'], detections.confidence)
         ]
 
+        print(labels)
+
         frame = self.box_annotator.annotate(scene=frame, detections=detections)
         frame = self.label_annotator.annotate(scene=frame, detections=detections, labels=labels)
 

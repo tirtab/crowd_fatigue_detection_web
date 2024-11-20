@@ -1,75 +1,85 @@
-from flask import Flask, render_template, Response
-from yolov11_detector import YOLOv11CrowdDetector
-import cv2
-import logging
+# analytics/app.py
+from flask import Flask
 import paho.mqtt.client as mqtt
 import json
 
-app = Flask(__name__)
-logging.basicConfig(level=logging.INFO)
+from datetime import datetime
+import logging
 
-# Inisialisasi detektor dan kamera
+import base64
+from PIL import Image
+import cv2
+import numpy as np
+from io import BytesIO
+
+# Model
+from yolov11_detector import YOLOv11CrowdDetector
+
+app = Flask(__name__)
+
+# Load YOLO model
 try:
     detector = YOLOv11CrowdDetector()
 except Exception as e:
     logging.error("Gagal menginisialisasi YOLOv11CrowdDetector: %s", e)
     detector = None
 
-camera = cv2.VideoCapture(1)
-if not camera.isOpened():
-    logging.error("Kamera tidak dapat diakses")
-    camera = None
 
-# Inisialisasi MQTT client
-mqtt_client = mqtt.Client("FlaskDetector")
-mqtt_client.connect("localhost", 1883)  # Ganti "localhost" jika broker berada di alamat lain
+# MQTT setup
+mqtt_client = mqtt.Client()
+mqtt_client.connect("localhost", 1883, 60)
 
 
-def generate_frames():
-    """Streaming video dari kamera dengan deteksi real-time."""
-    if not camera or not detector:
-        logging.error("Streaming tidak dapat dimulai: Kamera atau detektor tidak tersedia.")
-        return
+def process_frame(frame_data):
+    try:
+        frame_data = frame_data.split(',')[1]
+        frame_bytes = base64.b64decode(frame_data)
+        frame_pil = Image.open(BytesIO(frame_bytes))
+        frame_cv2 = cv2.cvtColor(np.array(frame_pil), cv2.COLOR_RGB2BGR)
 
-    while camera.isOpened():
-        success, frame = camera.read()
-        if not success:
-            logging.warning("Gagal menangkap frame dari kamera.")
-            break
-        try:
-            frame, detection_data = detector.detect_and_annotate(frame)
-            num_people = len(detection_data)
-            category = detector.get_crowd_category(num_people)
+        frame, detection_data = detector.detect_and_annotate(frame_cv2)
+        num_people = len(detection_data)
 
-            # Tambahkan data jumlah dan kategori ke dalam data deteksi
-            detection_summary = {
-                "num_people": num_people,
-                "category": category,
-                "detections": detection_data  # Tambahkan semua data bounding box dan confidence
-            }
+        print(type(detection_data))
+        detection_summary = {
+            "num_people": num_people,
+            "detections": detection_data  # Tambahkan semua data bounding box dan confidence
+        }
 
-            # Publikasikan data deteksi ke MQTT
-            mqtt_client.publish("crowd/detection", json.dumps(detection_summary))
+        print(detection_summary)
 
-            # Encoding frame untuk streaming
-            ret, buffer = cv2.imencode('.jpg', frame)
-            if ret:
-                yield (b'--frame\r\n'
-                       b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
-        except Exception as error:
-            logging.error("Error dalam memproses frame: %s", error)
-            break
+        return {
+            "status": "true",
+            "data": {
+                detection_data
+            },
+            "timestamp": str(datetime.now()),
+        }
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "timestamp": str(datetime.now()),
+            "error": str(e)
+        }
 
 
-@app.route('/')
-def index():
-    return render_template('index.html')
+def on_message(client, userdata, message):
+    try:
+        # Process frame
+        frame_data = message.payload.decode()
+        detections = process_frame(frame_data)
+
+        # Publish results back
+        mqtt_client.publish('video-analysis', json.dumps(detections))
+    except Exception as e:
+        print(f"Error in MQTT message handling: {str(e)}")
 
 
-@app.route('/video_feed')
-def video_feed():
-    return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+# Set up MQTT subscriber
+mqtt_client.on_message = on_message
+mqtt_client.subscribe('video-frames')
+mqtt_client.loop_start()
 
-
-if __name__ == "__main__":
-    app.run(debug=True)
+if __name__ == '__main__':
+    app.run(port=5000)
