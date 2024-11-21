@@ -71,8 +71,6 @@ class YOLOv11CrowdDetector:
             in zip(detections['class_name'], detections.confidence)
         ]
 
-        print(labels)
-
         frame = self.box_annotator.annotate(scene=frame, detections=detections)
         frame = self.label_annotator.annotate(scene=frame, detections=detections, labels=labels)
 
@@ -83,12 +81,8 @@ class YOLOv11CrowdDetector:
         # Ekstrak data bounding box, class, dan confidence untuk setiap deteksi
         detection_data = []
         for detection in detections:
-            box = detection['box']  # Asumsikan `box` menyimpan koordinat bounding box
-            class_name = detection['class_name']
-            confidence = detection['confidence']
+            box = detection[0]  # Asumsikan `box` menyimpan koordinat bounding box
             detection_data.append({
-                "class_name": class_name,
-                "confidence": float(confidence),
                 "bounding_box": {
                     "x_min": int(box[0]),
                     "y_min": int(box[1]),

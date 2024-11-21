@@ -24,10 +24,17 @@ except Exception as e:
     logging.error("Gagal menginisialisasi YOLOv11CrowdDetector: %s", e)
     detector = None
 
+# Konfigurasi broker HiveMQ
+BROKER = "f2427b6795414aa39ffb0f297736c0c8.s1.eu.hivemq.cloud"  # Ganti dengan host Anda
+PORT = 8883
+USERNAME = "muhammadRizki12"
+PASSWORD = "Kucinghitam12"
 
 # MQTT setup
 mqtt_client = mqtt.Client()
-mqtt_client.connect("localhost", 1883, 60)
+mqtt_client.username_pw_set(USERNAME, PASSWORD)
+mqtt_client.tls_set()
+mqtt_client.connect(BROKER, PORT)
 
 
 def process_frame(frame_data):
@@ -40,18 +47,16 @@ def process_frame(frame_data):
         frame, detection_data = detector.detect_and_annotate(frame_cv2)
         num_people = len(detection_data)
 
-        print(type(detection_data))
         detection_summary = {
             "num_people": num_people,
             "detections": detection_data  # Tambahkan semua data bounding box dan confidence
         }
 
-        print(detection_summary)
-
         return {
             "status": "true",
             "data": {
-                detection_data
+                "num_people": num_people,
+                "detections": detection_data
             },
             "timestamp": str(datetime.now()),
         }
@@ -82,4 +87,4 @@ mqtt_client.subscribe('video-frames')
 mqtt_client.loop_start()
 
 if __name__ == '__main__':
-    app.run(port=5000)
+    app.run(debug=True, port=5000)
