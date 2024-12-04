@@ -1,0 +1,8 @@
+supervision
+ultralytics
+openvino
+opencv-python
+flask
+pathlib
+gunicorn
+paho-mqtt
