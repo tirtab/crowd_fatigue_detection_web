@@ -1,0 +1,17 @@
+description: Ultralytics YOLO11n model trained on /kaggle/working/datasets/Driver_Fatigue-1/data.yaml
+author: Ultralytics
+date: '2024-12-01T23:29:41.702513'
+version: 8.3.39
+license: AGPL-3.0 License (https://ultralytics.com/license)
+docs: https://docs.ultralytics.com
+stride: 32
+task: detect
+batch: 1
+imgsz:
+- 640
+- 640
+names:
+  0: closed_eye
+  1: closed_mouth
+  2: open_eye
+  3: open_mouth

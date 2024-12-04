@@ -82,7 +82,7 @@ class YOLOv11CrowdDetector:
         detection_data = []
         for detection in detections:
             box = detection[0]  # Asumsikan `box` menyimpan koordinat bounding box
-            class_name = detection[1]
+            class_name = detections.data.get('class_name', None)
             confidence = detection[2]
             detection_data.append({
                 "class_name": class_name,

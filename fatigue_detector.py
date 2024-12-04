@@ -16,7 +16,7 @@ class YOLOv11FatigueDetector:
         self.frame_height = 480
 
         # Load model OpenVINO
-        det_model_path = Path("model/fatigue_5_openvino_model/best.xml")
+        det_model_path = Path("model/fatigue_6_openvino_model/best.xml")
         core = ov.Core()
         det_ov_model = core.read_model(det_model_path)
 
@@ -72,7 +72,7 @@ class YOLOv11FatigueDetector:
             logging.debug(f"Detected class_scores: {class_scores}")
 
             labels = [
-                f"{class_name} {confidence:.2f}"
+                f"{class_name} {confidence: .2f}"
                 for class_name, confidence in zip(detections['class_name'], detections.confidence)
             ]
 
