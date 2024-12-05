@@ -60,6 +60,16 @@ class YOLOv11CrowdDetector:
 
     def detect_and_annotate(self, frame):
         # Deteksi menggunakan YOLOv11
+        # def callback(image_slice: np.ndarray) -> sv.Detections:
+        #     result = self.det_model(image_slice)[0]
+        #     return sv.Detections.from_ultralytics(result).with_nms().with_nmm()
+        #
+        # slicer = sv.InferenceSlicer(callback=callback,
+        #                             overlap_ratio_wh=None, overlap_wh=(64, 64),
+        #                             overlap_filter=sv.OverlapFilter.NON_MAX_MERGE,
+        #                             iou_threshold=0.3)
+        # detections = slicer(frame)
+
         result = self.det_model(frame)[0]
         detections = sv.Detections.from_ultralytics(result).with_nms().with_nmm()
         detections = detections[detections.confidence > 0.5]
@@ -68,7 +78,7 @@ class YOLOv11CrowdDetector:
         labels = [
             f"{class_name} {confidence: .2f}"
             for class_name, confidence
-            in zip(detections['class_name'], detections.confidence)
+            in zip(detections.data.get("class_name", []), detections.confidence)
         ]
 
         frame = self.box_annotator.annotate(scene=frame, detections=detections)
@@ -80,10 +90,10 @@ class YOLOv11CrowdDetector:
 
         # Ekstrak data bounding box, class, dan confidence untuk setiap deteksi
         detection_data = []
-        for detection in detections:
-            box = detection[0]  # Asumsikan `box` menyimpan koordinat bounding box
-            class_name = detections.data.get('class_name', None)
-            confidence = detection[2]
+        for i in range(len(detections)):
+            box = detections.xyxy[i]
+            class_name = detections.data.get("class_name", [None])[i]
+            confidence = detections.confidence[i]
             detection_data.append({
                 "class_name": class_name,
                 "confidence": float(confidence),
