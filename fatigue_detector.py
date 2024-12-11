@@ -11,47 +11,93 @@ logging.basicConfig(level=logging.DEBUG)  # Atur level ke DEBUG untuk detail leb
 
 
 class YOLOv11FatigueDetector:
+    _instance = None
+
+    def __new__(cls):
+        if not cls._instance:
+            cls._instance = super(YOLOv11FatigueDetector, cls).__new__(cls)
+        return cls._instance
+
     def __init__(self):
-        self.frame_width = 640
-        self.frame_height = 480
+        # Cegah inisialisasi ulang
+        if hasattr(self, 'initialized'):
+            return
 
-        # Load model OpenVINO
-        det_model_path = Path("model/fatigue_6_openvino_model/best.xml")
-        core = ov.Core()
-        det_ov_model = core.read_model(det_model_path)
+        try:
+            # Logging yang lebih detail
+            logging.basicConfig(level=logging.INFO)
+            self.logger = logging.getLogger(__name__)
 
-        # Konfigurasi perangkat
-        self.device = "AUTO"
+            # Optimasi konfigurasi model
+            self.frame_width = 640
+            self.frame_height = 480
+
+            # Load model dengan error handling yang lebih baik
+            det_model_path = Path("model/fatigue_6_openvino_model/best.xml")
+            if not det_model_path.exists():
+                raise FileNotFoundError(f"Model not found at {det_model_path}")
+
+            core = ov.Core()
+            det_ov_model = core.read_model(det_model_path)
+
+            # Konfigurasi perangkat dengan lebih fleksibel
+            self.device = self._select_optimal_device(core)
+            det_compiled_model = self._compile_model(core, det_ov_model)
+
+            self.det_model = YOLO(det_model_path.parent, task="detect")
+            self._setup_predictor(det_compiled_model)
+
+            # Inisialisasi annotator dengan konfigurasi yang dapat disesuaikan
+            self.box_annotator = sv.BoxAnnotator(thickness=2, color=sv.ColorPalette.DEFAULT)
+            self.label_annotator = sv.LabelAnnotator()
+
+            self.initialized = True
+            self.logger.info("Fatigue Detector berhasil diinisialisasi")
+
+        except Exception as e:
+            self.logger.error(f"Inisialisasi Fatigue Detector gagal: {e}")
+            raise
+
+    def _select_optimal_device(self, core):
+        """Pilih perangkat optimal untuk inferensi"""
+        available_devices = core.available_devices
+        self.logger.info(f"Perangkat tersedia: {available_devices}")
+
+        # Prioritas: GPU > AUTO > CPU
+        if "GPU" in available_devices:
+            return "GPU"
+        elif "AUTO" in available_devices:
+            return "AUTO"
+        return "CPU"
+
+    def _compile_model(self, core, det_ov_model):
+        """Kompilasi model dengan konfigurasi khusus"""
         ov_config = {}
-
         if self.device != "CPU":
             det_ov_model.reshape({0: [1, 3, 640, 640]})
-        if "GPU" in self.device or ("AUTO" in self.device and "GPU" in core.available_devices):
+
+        if "GPU" in self.device:
             ov_config = {"GPU_DISABLE_WINOGRAD_CONVOLUTION": "YES"}
-        det_compiled_model = core.compile_model(det_ov_model, self.device, ov_config)
 
-        self.det_model = YOLO(det_model_path.parent, task="detect")
+        return core.compile_model(det_ov_model, self.device, ov_config)
 
+    def _setup_predictor(self, compiled_model):
+        """Konfigurasi prediktor dengan parameter optimal"""
         if self.det_model.predictor is None:
-            custom = {"conf": 0.5, "batch": 1, "save": False, "mode": "predict"}  # method defaults
+            custom = {
+                "conf": 0.5,  # Threshold confidence
+                "batch": 1,
+                "save": False,
+                "mode": "predict"
+            }
             args2 = {**self.det_model.overrides, **custom}
-            self.det_model.predictor = self.det_model._smart_load("predictor")(overrides=args2,
-                                                                               _callbacks=self.det_model.callbacks)
+            self.det_model.predictor = self.det_model._smart_load("predictor")(
+                overrides=args2,
+                _callbacks=self.det_model.callbacks
+            )
             self.det_model.predictor.setup_model(model=self.det_model.model)
 
-        self.det_model.predictor.model.ov_compiled_model = det_compiled_model
-
-        # Inisialisasi anotator
-        self.box_annotator = sv.BoxAnnotator(thickness=2)
-        self.label_annotator = sv.LabelAnnotator()
-
-        # Pelacakan waktu untuk close_eye dan open_mouth
-        self.close_eye_start_time = None
-        self.open_mouth_start_time = None
-        self.is_close_eye = False
-        self.is_open_mouth = False
-
-        print("Model Fatigue Detector berhasil dimuat")
+            self.det_model.predictor.model.ov_compiled_model = compiled_model
 
     def detect_and_annotate(self, frame):
         try:
@@ -85,38 +131,43 @@ class YOLOv11FatigueDetector:
             return frame, [0, 0, 0, 0]
 
     def get_fatigue_category(self, class_scores):
+        """Algoritma deteksi kelelahan yang lebih kompleks"""
+        thresholds = {
+            'close_eye': 0.5,  # Threshold lebih tinggi
+            'open_mouth': 0.5,
+            'duration_close_eye': 3,  # Detik
+            'duration_open_mouth': 2
+        }
+
         try:
-            logging.debug(f"class_scores: {class_scores} (type: {type(class_scores)})")
-            if len(class_scores) < 4:
-                class_scores = class_scores + [0] * (4 - len(class_scores))
-
-            close_eye_score = class_scores[0]
-            open_mouth_score = class_scores[3]
-
-            logging.debug(f"Scores: {class_scores}")
-
-            threshold = 0.5
             current_time = time.time()
 
-            if close_eye_score > threshold:
+            # Deteksi mata tertutup
+            if class_scores[0] > thresholds['close_eye']:
                 if not self.is_close_eye:
                     self.close_eye_start_time = current_time
                     self.is_close_eye = True
-                elif current_time - self.close_eye_start_time >= 3:
-                    return "Fatigue Detected: Close Eye"
+
+                # Cek durasi mata tertutup
+                if current_time - self.close_eye_start_time >= thresholds['duration_close_eye']:
+                    return "Fatigue: Mata Tertutup Lama"
             else:
                 self.is_close_eye = False
 
-            if open_mouth_score > threshold:
+            # Deteksi mulut terbuka
+            if class_scores[3] > thresholds['open_mouth']:
                 if not self.is_open_mouth:
                     self.open_mouth_start_time = current_time
                     self.is_open_mouth = True
-                elif current_time - self.open_mouth_start_time >= 2:
-                    return "Fatigue Detected: Open Mouth"
+
+                # Cek durasi mulut terbuka
+                if current_time - self.open_mouth_start_time >= thresholds['duration_open_mouth']:
+                    return "Fatigue: Mulut Terbuka Lama"
             else:
                 self.is_open_mouth = False
 
             return "Normal"
+
         except Exception as e:
-            logging.error(f"Error dalam deteksi kelelahan: {e}")
+            self.logger.error(f"Gagal mengecek kelelahan: {e}")
             return "Error"

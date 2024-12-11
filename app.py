@@ -10,17 +10,75 @@ import base64
 from PIL import Image
 import numpy as np
 from io import BytesIO
+import gc
 
-# Inisialisasi Flask dan Flask-MQTT
-app = Flask(__name__)
-logging.basicConfig(level=logging.DEBUG)
+# Konfigurasi Logging yang Lebih Komprehensif
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('app.log'),
+        logging.StreamHandler()
+    ]
+)
 
-# Konfigurasi MQTT
-app.config['MQTT_BROKER_URL'] = 'localhost'
-app.config['MQTT_BROKER_PORT'] = 1883
-app.config['MQTT_REFRESH_TIME'] = 1.0  # Dalam detik
+logger = logging.getLogger(__name__)
 
-mqtt = Mqtt(app)
+
+class AppManager:
+    _instance = None
+
+    def __new__(cls):
+        if not cls._instance:
+            cls._instance = super(AppManager, cls).__new__(cls)
+        return cls._instance
+
+    def __init__(self):
+        if hasattr(self, 'initialized'):
+            return
+
+        # Inisialisasi sumber daya sekali
+        self.app = Flask(__name__)
+        self.mqtt = self._setup_mqtt()
+
+        # Inisialisasi detector dengan singleton
+        self.crowd_detector = YOLOv11CrowdDetector()
+        self.fatigue_detector = YOLOv11FatigueDetector()
+
+        self.camera = self._init_camera()
+
+        self.initialized = True
+
+    def _setup_mqtt(self):
+        """Setup MQTT dengan konfigurasi aman"""
+        self.app.config['MQTT_BROKER_URL'] = 'localhost'
+        self.app.config['MQTT_BROKER_PORT'] = 1883
+        self.app.config['MQTT_REFRESH_TIME'] = 1.0
+
+        mqtt = Mqtt(self.app)
+        return mqtt
+
+
+    def _init_camera(self):
+        """Inisialisasi kamera dengan error handling"""
+        try:
+            camera = cv2.VideoCapture(1)
+            if not camera.isOpened():
+                logger.error("Kamera tidak dapat diakses")
+                return None
+            return camera
+        except Exception as e:
+            logger.error(f"Gagal menginisialisasi kamera: {e}")
+            return None
+
+
+# Gunakan metode singleton untuk manajemen aplikasi
+app_manager = AppManager()
+app = app_manager.app
+mqtt = app_manager.mqtt
+camera= app_manager._init_camera()
+crowd_detector = app_manager.crowd_detector
+fatigue_detector = app_manager.fatigue_detector
 
 # Topik MQTT
 CROWD_FRAME_TOPIC = 'mqtt-crowd-frame'
@@ -31,25 +89,6 @@ FATIGUE_RESULT_TOPIC = 'mqtt-fatigue-result'
 # Variabel Global untuk Menyimpan Frame Terakhir
 latest_crowd_frame = None
 latest_fatigue_frame = None
-
-# Inisialisasi Kamera dan Detektor
-try:
-    camera = cv2.VideoCapture(1)  # Gunakan indeks kamera yang sesuai
-    if not camera.isOpened():
-        logging.error("Kamera tidak dapat diakses.")
-        camera = None
-except Exception as e:
-    logging.error(f"Gagal menginisialisasi kamera: {e}")
-    camera = None
-
-try:
-    crowd_detector = YOLOv11CrowdDetector()
-    fatigue_detector = YOLOv11FatigueDetector()
-except Exception as e:
-    logging.error(f"Gagal menginisialisasi detektor: {e}")
-    crowd_detector = None
-    fatigue_detector = None
-
 
 # Fungsi untuk Memproses Frame dari Data Base64
 def process_frame(frame_data):
@@ -198,6 +237,11 @@ def video_feed_crowd():
 def video_feed_fatigue():
     return Response(generate_fatigue_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
+# Tambahkan pembersihan memori secara berkala
+@app.teardown_appcontext
+def cleanup_resources(exception=None):
+    gc.collect()
+    logger.info("Membersihkan resource aplikasi")
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
