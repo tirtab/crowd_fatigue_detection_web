@@ -133,11 +133,11 @@ def generate_crowd_frames():
                          "detections": detection_data}
             mqtt.publish(CROWD_RESULT_TOPIC, json.dumps(mqtt_data, default=custom_serializer))
 
-            # Encode Frame untuk Streaming
-            ret, buffer = cv2.imencode('.jpg', frame)
-            if ret:
-                yield (b'--frame\r\n'
-                       b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+            # # Encode Frame untuk Streaming
+            # ret, buffer = cv2.imencode('.jpg', frame)
+            # if ret:
+            #     yield (b'--frame\r\n'
+            #            b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
         except Exception as e:
             logging.error(f"Error dalam memproses frame crowd: {e}")
             break
@@ -166,10 +166,10 @@ def generate_fatigue_frames():
             cv2.putText(frame, fatigue_status, (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
             # Encode Frame untuk Streaming
-            ret, buffer = cv2.imencode('.jpg', frame)
-            if ret:
-                yield (b'--frame\r\n'
-                       b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+            # ret, buffer = cv2.imencode('.jpg', frame)
+            # if ret:
+            #     yield (b'--frame\r\n'
+            #            b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
         except Exception as e:
             logging.error(f"Error dalam memproses frame fatigue: {e}")
             break
