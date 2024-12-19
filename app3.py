@@ -1,7 +1,7 @@
 from flask import Flask, jsonify
 from flask_mqtt import Mqtt
-from fatigue_detector import YOLOv11FatigueDetector
 from crowd_detector import YOLOv11CrowdDetector
+from fatigue_detector import YOLOv11FatigueDetector
 from PIL import Image
 from io import BytesIO
 import cv2
@@ -18,10 +18,11 @@ from ultralytics import YOLO
 
 app = Flask(__name__)
 
-# initialize model
 try:
     crowd_detector = YOLOv11CrowdDetector()
-    fatigue_detector = YOLOv11FatigueDetector()
+    # crowd_detector = YOLOv11FatigueDetector()
+    # print(crowd_detector)
+    # model = YOLO('yolov8n.pt')
 except Exception as e:
     logging.error("Gagal menginisialisasi YOLOv11CrowdDetector: %s", e)
 
@@ -47,7 +48,6 @@ FATIGUE_RESULT_TOPIC = 'mqtt-fatigue-result'
 latest_crowd_frame = None
 latest_fatigue_frame = None
 
-
 # Base64 to image
 # Fungsi untuk Memproses Frame dari Data Base64
 def process_frame(frame_data):
@@ -61,16 +61,6 @@ def process_frame(frame_data):
     except Exception as e:
         logging.error(f"Error processing frame: {e}")
         return None
-
-# konversi objek numpy.ndarray menjadi list
-def custom_serializer(obj):
-    if isinstance(obj, np.ndarray):
-        return obj.tolist()
-    elif isinstance(obj, (np.float32, np.float64)):
-        return float(obj)  # Konversi ke tipe float native Python
-    elif isinstance(obj, (np.int32, np.int64)):
-        return int(obj)  # Konversi ke tipe int native Python
-    raise TypeError(f"Type {type(obj)} not serializable")
 
 @mqtt.on_connect()
 def handle_connect(client, userdata, flags, rc):
@@ -100,30 +90,34 @@ def handle_mqtt_message(clientt, userdata, message):
             # proccess frame
             frame = process_frame(data)
 
-            frame, detection_data = crowd_detector.detect_and_annotate(frame)
-            num_people = len(detection_data)
+            # frame, detection_data = crowd_detector.detect_and_annotate(frame)
+            # fatigue_status = crowd_detector.get_fatigue_category(detection_data)
+
+            results = crowd_detector.detect_and_annotate(frame)
+            # num_people = len(detection_data)
+
+            # Extract relevant data from the results
+            detections = []
+            for result in results:
+                for box in result.boxes:
+                    detections.append({
+                        # 'class': model.names[int(box.cls)],  # Nama kelas
+                        'confidence': float(box.conf),  # Skor kepercayaan
+                        'box': [float(coord) for coord in box.xyxy[0].tolist()]  # Koordinat bounding box
+                    })
 
             # process crowd frame and publish result
-            mqtt.publish(CROWD_RESULT_TOPIC, json.dumps({
-                'detection_data': detection_data,
-                'num_people': num_people
-            }))
+            mqtt.publish(CROWD_RESULT_TOPIC, json.dumps({'detection_data': detections}))
 
         elif topic == FATIGUE_FRAME_TOPIC:
             latest_fatigue_frame = data
-            # print(latest_fatigue_frame)
+            print(latest_fatigue_frame)
 
-            # process fatigue frame and
-            frame = process_frame(data)
-
-            frame, detected_classes = fatigue_detector.detect_and_annotate(frame)
-            fatigue_status = fatigue_detector.get_fatigue_category(detected_classes)
-
-            # publish result
-            mqtt.publish(FATIGUE_RESULT_TOPIC, json.dumps({
-                'detected_class': detected_classes,
-                'fatigue_status': fatigue_status
-            }, default=custom_serializer))
+            # frame, detection_data = crowd_detector.detect_and_annotate(frame)
+            # fatigue_status = crowd_detector.get_fatigue_category(detection_data)
+            # process fatigue frame and publish result
+            # fatigue_result = process_fatigue_frame(data)
+            # mqtt.publish(FATIGUE_RESULT_TOPIC, json.dumps(fatigue_result))
 
     except json.JSONDecodeError:
         print(f'Error decoding JSON from topic {topic}')
