@@ -62,6 +62,7 @@ def process_frame(frame_data):
         logging.error(f"Error processing frame: {e}")
         return None
 
+
 # konversi objek numpy.ndarray menjadi list
 def custom_serializer(obj):
     if isinstance(obj, np.ndarray):
@@ -71,6 +72,7 @@ def custom_serializer(obj):
     elif isinstance(obj, (np.int32, np.int64)):
         return int(obj)  # Konversi ke tipe int native Python
     raise TypeError(f"Type {type(obj)} not serializable")
+
 
 @mqtt.on_connect()
 def handle_connect(client, userdata, flags, rc):
@@ -116,12 +118,12 @@ def handle_mqtt_message(clientt, userdata, message):
             # process fatigue frame and
             frame = process_frame(data)
 
-            frame, detected_classes = fatigue_detector.detect_and_annotate(frame)
-            fatigue_status = fatigue_detector.get_fatigue_category(detected_classes)
+            frame, detection_results = fatigue_detector.detect_and_annotate(frame)
+            fatigue_status = fatigue_detector.get_fatigue_category(detection_results)
 
             # publish result
             mqtt.publish(FATIGUE_RESULT_TOPIC, json.dumps({
-                'detected_class': detected_classes,
+                'detection_result': detection_results,
                 'fatigue_status': fatigue_status
             }, default=custom_serializer))
 
@@ -129,20 +131,6 @@ def handle_mqtt_message(clientt, userdata, message):
         print(f'Error decoding JSON from topic {topic}')
     except Exception as e:
         print(f'Error processing message from {topic}: {e}')
-
-
-def process_crowd_frame(frame_data):
-    return {
-        'status': 'true',
-        'message': 'this is crowd frame'
-    }
-
-
-def process_fatigue_frame(frame_data):
-    return {
-        'status': 'true',
-        'message': 'this is fatigue frame'
-    }
 
 
 if __name__ == '__app__':
