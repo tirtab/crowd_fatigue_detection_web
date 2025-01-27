@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask
 from flask_mqtt import Mqtt
 from fatigue_detector import YOLOv11FatigueDetector
 from crowd_detector import YOLOv11CrowdDetector
@@ -7,12 +7,8 @@ from io import BytesIO
 import cv2
 import logging
 import json
-from datetime import datetime
 import numpy as np
 import base64
-import time
-import threading
-import gc
 
 from ultralytics import YOLO
 
@@ -119,12 +115,12 @@ def handle_mqtt_message(clientt, userdata, message):
             frame = process_frame(data)
 
             frame, detection_results = fatigue_detector.detect_and_annotate(frame)
-            fatigue_status = fatigue_detector.get_fatigue_category(detection_results)
+            fatigue_status = fatigue_detector.get_fatigue_category(frame)
 
             # publish result
             mqtt.publish(FATIGUE_RESULT_TOPIC, json.dumps({
-                'detection_result': detection_results,
-                'fatigue_status': fatigue_status
+                'detection_data': detection_results,
+                'status': fatigue_status
             }, default=custom_serializer))
 
     except json.JSONDecodeError:
@@ -134,4 +130,4 @@ def handle_mqtt_message(clientt, userdata, message):
 
 
 if __name__ == '__app__':
-    app.run(debug=True)
+    app.run(debug=True, port=5000)

@@ -5,7 +5,6 @@ from ultralytics import YOLO
 from pathlib import Path
 import openvino as ov
 import time
-import numpy as np
 
 logging.basicConfig(level=logging.DEBUG)  # Atur level ke DEBUG untuk detail lebih lengkap
 
@@ -155,49 +154,54 @@ class YOLOv11FatigueDetector:
             frame = self.box_annotator.annotate(scene=frame, detections=detections)
             frame = self.label_annotator.annotate(scene=frame, detections=detections, labels=labels)
 
-            return frame, detection_data
+            return detections, detection_data
         except Exception as e:
             logging.error(f"Error dalam anotasi deteksi: {e}")
             return frame, [0, 0, 0, 0]
 
-    def get_fatigue_category(self, detections, threshold=0.5):
+    def get_fatigue_category(self, detections):
         try:
             current_time = time.time()
+            threshold = 0.6
 
             # Hitung jumlah deteksi kelas "closed_eye" dengan confidence > threshold
-            close_eye_score = max(
-                confidence
+            close_eye_count = sum(
+                confidence > threshold
                 for class_name, confidence in zip(
                     detections["class_name"], detections.confidence
                 )
-                if class_name == "mata_close"
-            ) if "mata_close" in detections["class_name"] else 0
+                if class_name == "closed_eye"
+            )
 
             open_mouth_score = max(
                 confidence
                 for class_name, confidence in zip(
                     detections["class_name"], detections.confidence
                 )
-                if class_name == "mulut_open"
-            ) if "mulut_open" in detections["class_name"] else 0
+                if class_name == "open_mouth"
+            ) if "open_mouth" in detections["class_name"] else 0
 
             # Jika kelas "closed_eye" terdeteksi minimal 2 kali
-            if close_eye_score > threshold:
+            if close_eye_count == 2:
                 if not self.is_close_eye:
                     self.close_eye_start_time = current_time
                     self.is_close_eye = True
                 # Cek durasi mata tertutup
-                elif current_time - self.close_eye_start_time >= 3:
+                if current_time - self.close_eye_start_time >= 3:
                     # Cek jika mulut juga terbuka
                     if open_mouth_score > threshold:
                         if not self.is_open_mouth:
                             self.open_mouth_start_time = current_time
                             self.is_open_mouth = True
-                        elif current_time - self.open_mouth_start_time >= 4:
+                        elif current_time - self.open_mouth_start_time >= 2:
                             return "Fatigue Detected: Open Mouth and Close Eye"
+                    else:
+                        self.is_open_mouth = False
+                        self.open_mouth_start_time = 0
                     return "Fatigue Detected: Close Eye"
             else:
                 self.is_close_eye = False
+                self.close_eye_start_time = 0
 
             # Deteksi mulut terbuka
 
@@ -206,10 +210,21 @@ class YOLOv11FatigueDetector:
                     self.open_mouth_start_time = current_time
                     self.is_open_mouth = True
                 # Cek durasi mulut terbuka
-                elif current_time - self.open_mouth_start_time >= 2:
+                if current_time - self.open_mouth_start_time >= 4:
+                    # Cek jika mata juga terbuka
+                    if close_eye_count == 2:
+                        if not self.is_close_eye:
+                            self.close_eye_start_time = current_time
+                            self.is_close_eye = True
+                        elif current_time - self.close_eye_start_time >= 1:
+                            return "Fatigue Detected: Open Mouth and Close Eye"
+                    else:
+                        self.is_close_eye = False
+                        self.close_eye_start_time = 0
                     return "Fatigue Detected: Open Mouth"
             else:
                 self.is_open_mouth = False
+                self.open_mouth_start_time = 0
 
             # if open_mouth_score > threshold and close_eye_count >= 2:
             #     if not self.is_open_mouth and self.is_close_eye:

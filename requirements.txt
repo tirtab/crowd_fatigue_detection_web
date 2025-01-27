@@ -6,4 +6,5 @@ flask
 pathlib
 gunicorn
 flask-mqtt
-orjson
+numpy
+pillow
