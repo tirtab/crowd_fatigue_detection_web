@@ -115,7 +115,10 @@ def handle_mqtt_message(clientt, userdata, message):
             frame = process_frame(data)
 
             frame, detection_results = fatigue_detector.detect_and_annotate(frame)
-            fatigue_status = fatigue_detector.get_fatigue_category(frame)
+            if detection_results == []:
+                fatigue_status = "UNDETECTED"
+            else:
+                fatigue_status = fatigue_detector.get_fatigue_category(frame)
 
             # publish result
             mqtt.publish(FATIGUE_RESULT_TOPIC, json.dumps({

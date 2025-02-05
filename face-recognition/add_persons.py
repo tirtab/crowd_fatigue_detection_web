@@ -17,11 +17,11 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Initialize the face detector (Choose one of the detectors)
 # detector = Yolov5Face(model_file="face_detection/yolov5_face/weights/yolov5n-face.pt")
-detector = SCRFD(model_file="face_detection/scrfd/weights/scrfd_2.5g_bnkps.onnx")
+detector = SCRFD(model_file="D:/magang/comvis/crowd_control_web/face-recognition/face_detection/scrfd/weights/scrfd_2.5g_bnkps.onnx")
 
 # Initialize the face recognizer
 recognizer = iresnet_inference(
-    model_name="r100", path="face_recognition/arcface/weights/arcface_r100.pth", device=device
+    model_name="r100", path="D:/magang/comvis/crowd_control_web/face-recognition/face_recognition/arcface/weights/arcface_r100.pth", device=device
 )
 
 
@@ -148,25 +148,25 @@ if __name__ == "__main__":
     parser.add_argument(
         "--backup-dir",
         type=str,
-        default="./datasets/backup",
+        default="D:/magang/comvis/crowd_control_web/face-recognition/datasets/backup",
         help="Directory to save person data.",
     )
     parser.add_argument(
         "--add-persons-dir",
         type=str,
-        default="./datasets/new_persons",
+        default="D:/magang/comvis/crowd_control_web/face-recognition/datasets/new_persons",
         help="Directory to add new persons.",
     )
     parser.add_argument(
         "--faces-save-dir",
         type=str,
-        default="./datasets/data/",
+        default="D:/magang/comvis/crowd_control_web/face-recognition/datasets/data/",
         help="Directory to save faces.",
     )
     parser.add_argument(
         "--features-path",
         type=str,
-        default="./datasets/face_features/feature",
+        default="D:/magang/comvis/crowd_control_web/face-recognition/datasets/face_features/feature",
         help="Path to save face features.",
     )
     opt = parser.parse_args()

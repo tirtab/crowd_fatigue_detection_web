@@ -231,7 +231,7 @@ def tracking(detector, args):
     tracker = BYTETracker(args=args, frame_rate=30)
     frame_id = 0
 
-    cap = cv2.VideoCapture(1)
+    cap = cv2.VideoCapture(0)
 
     while not stop_threads:
         _, img = cap.read()
@@ -278,7 +278,7 @@ def recognize():
                         if score < 0.5:
                             caption = "UN_KNOWN"
                         else:
-                            caption = f"{name}:{score:.2f}"
+                            caption = f"{name}"
 
                     id_face_mapping[tracking_ids[i]] = caption
 
