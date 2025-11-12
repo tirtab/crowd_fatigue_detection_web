@@ -55,6 +55,9 @@ class YOLOv11FatigueDetector:
             self.open_mouth_start_time = 0
             self.is_close_eye = False
             self.is_open_mouth = False
+            self.is_closed_mouth = False
+            self.is_open_eye = False
+
 
             self.initialized = True
             self.logger.info("Fatigue Detector berhasil diinisialisasi")
@@ -194,11 +197,11 @@ class YOLOv11FatigueDetector:
                             self.open_mouth_start_time = current_time
                             self.is_open_mouth = True
                         elif current_time - self.open_mouth_start_time >= 2:
-                            return "Fatigue Detected: Open Mouth and Close Eye"
+                            return "Open Mouth and Close Eye"
                     else:
                         self.is_open_mouth = False
                         self.open_mouth_start_time = 0
-                    return "Fatigue Detected: Close Eye"
+                    return "Close Eye"
             else:
                 self.is_close_eye = False
                 self.close_eye_start_time = 0
@@ -217,11 +220,11 @@ class YOLOv11FatigueDetector:
                             self.close_eye_start_time = current_time
                             self.is_close_eye = True
                         elif current_time - self.close_eye_start_time >= 1:
-                            return "Fatigue Detected: Open Mouth and Close Eye"
+                            return "Open Mouth and Close Eye"
                     else:
                         self.is_close_eye = False
                         self.close_eye_start_time = 0
-                    return "Fatigue Detected: Open Mouth"
+                    return "Open Mouth"
             else:
                 self.is_open_mouth = False
                 self.open_mouth_start_time = 0
@@ -234,7 +237,7 @@ class YOLOv11FatigueDetector:
             #         self.is_close_eye = True
             #     # Cek durasi mulut terbuka
             #     elif current_time - self.open_mouth_start_time and current_time - self.close_eye_start_time >= 2:
-            #         return "Fatigue Detected: Open Mouth & Close Eye"
+            #         return " Open Mouth & Close Eye"
             # else:
             #     self.is_open_mouth = False
             #     self.is_close_eye = False
